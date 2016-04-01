@@ -1,22 +1,22 @@
 #include "raw.ceu"
 
 native do
-    GstMessage* PTR;
+  GstMessage* PTR;
 end
 input _GstMessage&& GST_MESSAGE_ERROR;
 input _GstMessage&& GST_MESSAGE_EOS;
 
 spawn do
-    loop do
-        _PTR = await GST_MESSAGE;
-        if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_ERROR then
-            async do
-                emit GST_MESSAGE_ERROR => _PTR;
-            end
-        else/if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_EOS then
-            async do
-                emit GST_MESSAGE_EOS => _PTR;
-            end
-        end
+  loop do
+    _PTR = await GST_MESSAGE;
+    if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_ERROR then
+      async do
+        emit GST_MESSAGE_ERROR => _PTR;
+      end
+    else/if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_EOS then
+      async do
+        emit GST_MESSAGE_EOS => _PTR;
+      end
     end
+  end
 end

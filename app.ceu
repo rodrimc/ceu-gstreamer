@@ -80,16 +80,16 @@ _g_object_set (_G_OBJECT(_src), "uri", "file:///tmp/video.mp4", null);
 
 _gst_element_set_state (_pipeline, _GST_STATE_PLAYING);
 finalize with
-    _gst_element_set_state (_pipeline, _GST_STATE_NULL);
+  _gst_element_set_state (_pipeline, _GST_STATE_NULL);
 end
 
 watching GST_MESSAGE_ERROR do
-    watching GST_MESSAGE_EOS do
-        // programa
-        every 1s do
-            _printf("ok\n");
-        end
+  watching GST_MESSAGE_EOS do
+    // programa
+    every 1s do
+      _printf("ok\n");
     end
+  end
 end
 
 escape 0;
