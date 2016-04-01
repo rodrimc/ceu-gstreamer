@@ -1,4 +1,4 @@
-#include "events.ceu"
+#include "high.ceu"
 
 native/pre do
 GstElement *src;
@@ -75,28 +75,21 @@ with
 end
 
 _gst_bin_add_many (_GST_BIN (_pipeline), _src, _sink, null); 
-_g_signal_connect (_G_OBJECT (_src), "pad-added", 
-                                    _G_CALLBACK (_cb_pad_added), null); 
-_g_object_set (_G_OBJECT(_src), "uri", 
-  "file:///media/rodrigocosta/Data/media_test/big_buck_bunny_1080p_stereo.avi",
-  null);
+_g_signal_connect (_G_OBJECT (_src), "pad-added", _G_CALLBACK (_cb_pad_added), null);
+_g_object_set (_G_OBJECT(_src), "uri", "file:///tmp/video.mp4", null);
 
 _gst_element_set_state (_pipeline, _GST_STATE_PLAYING);
-
-var int i = 1;
-par/or do
-  every GST_MESSAGE do
-    _printf ("I've got a new message!\n");
-  end
-with
-  every 1s do
-    _printf ("%d\n", i);
-    i = i + 1;
-  end
-with
-  await 10s;
+finalize with
+    _gst_element_set_state (_pipeline, _GST_STATE_NULL);
 end
 
-_gst_element_set_state (_pipeline, _GST_STATE_NULL);
+watching GST_MESSAGE_ERROR do
+    watching GST_MESSAGE_EOS do
+        // programa
+        every 1s do
+            _printf("ok\n");
+        end
+    end
+end
 
 escape 0;
