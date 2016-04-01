@@ -1,0 +1,102 @@
+#include "events.ceu"
+
+native/pre do
+GstElement *src;
+GstElement *sink;
+end
+
+native do 
+void
+cb_pad_added (GstElement *dec, GstPad *pad, gpointer _)
+{
+  GstCaps *caps;
+  GstStructure *str;
+  const gchar *name;
+  GstPadTemplate *templ;
+  GstElementClass *klass;
+
+  /* check media type */
+  caps = gst_pad_query_caps (pad, NULL);
+  str = gst_caps_get_structure (caps, 0);
+  name = gst_structure_get_name (str);
+
+  klass = GST_ELEMENT_GET_CLASS (sink);
+
+  if (g_str_has_prefix (name, "audio")) 
+    templ = gst_element_class_get_pad_template (klass, "audio_sink");
+  else if (g_str_has_prefix (name, "video"))
+    templ = gst_element_class_get_pad_template (klass, "video_sink");
+  else if (g_str_has_prefix (name, "text")) 
+    templ = gst_element_class_get_pad_template (klass, "text_sink");
+  else 
+    templ = NULL;
+
+  if (templ) 
+  {
+    GstPad *sinkpad;
+
+    sinkpad = gst_element_request_pad (sink, templ, NULL, NULL);
+
+    if (!gst_pad_is_linked (sinkpad))
+      gst_pad_link (pad, sinkpad);
+
+    gst_object_unref (sinkpad);
+  }
+}
+end
+
+await OS_START;
+_gst_init (null, null); 
+
+finalize
+  _pipeline = _gst_pipeline_new ("pipeline");
+with
+  _gst_object_unref (_pipeline);
+end
+
+finalize
+  _src = _gst_element_factory_make ("uridecodebin", "decoder");
+with
+end
+
+finalize
+  _sink = _gst_element_factory_make ("playsink", "sink");
+with
+end
+
+_assert (_pipeline);
+_assert (_src);
+_assert (_sink);
+
+finalize
+  _bus = _gst_pipeline_get_bus (_GST_PIPELINE(_pipeline));
+with
+  _gst_object_unref(_bus);
+end
+
+_gst_bin_add_many (_GST_BIN (_pipeline), _src, _sink, null); 
+_g_signal_connect (_G_OBJECT (_src), "pad-added", 
+                                    _G_CALLBACK (_cb_pad_added), null); 
+_g_object_set (_G_OBJECT(_src), "uri", 
+  "file:///media/rodrigocosta/Data/media_test/big_buck_bunny_1080p_stereo.avi",
+  null);
+
+_gst_element_set_state (_pipeline, _GST_STATE_PLAYING);
+
+var int i = 1;
+par/or do
+  every GST_MESSAGE do
+    _printf ("I've got a new message!\n");
+  end
+with
+  every 1s do
+    _printf ("%d\n", i);
+    i = i + 1;
+  end
+with
+  await 10s;
+end
+
+_gst_element_set_state (_pipeline, _GST_STATE_NULL);
+
+escape 0;

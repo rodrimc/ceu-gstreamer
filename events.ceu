@@ -1,0 +1,39 @@
+input (_GstMessage&&) GST_MESSAGE;
+input (void) OS_START;
+
+native/pre do
+##include <glib.h>
+##include <gst/gst.h>
+
+##define UNSAFE(x) x
+
+GstElement *pipeline = NULL;
+GstBus *bus = NULL;
+end
+
+native @pure _UNSAFE;
+native @nohold _gst_message_unref ();
+
+spawn do
+  async do 
+    var s64 base, current, tmp;
+    base = _g_get_monotonic_time ();
+    current = 0;
+    tmp = 0;
+    loop do
+      if (_gst_bus_have_pending (_bus)) then
+        var _GstMessage&& msg = _UNSAFE (_gst_bus_pop(_bus));
+        emit GST_MESSAGE => msg;
+        _gst_message_unref (msg);
+      end
+        
+      current = _g_get_monotonic_time ();
+      tmp = current - base;
+      
+      base = current;
+      emit (tmp)us;
+    end
+  end
+  await FOREVER;
+end
+
