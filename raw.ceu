@@ -1,19 +1,24 @@
 input (_GstMessage&&) GST_MESSAGE;
-input (void) OS_START;
+input (int&&, char&& &&) OS_START;
 
 native/pre do
 ##include <glib.h>
 ##include <gst/gst.h>
 
 ##define UNSAFE(x) x
+##define ELEM_N(V,N) V[N]
 
 GstElement *pipeline = NULL;
 GstBus *bus = NULL;
 end
 
 native @pure _UNSAFE;
-native @nohold _gst_message_unref ();
+native @pure _gst_init ();
+native @pure _ELEM_N();
 native @pure _GST_MESSAGE_TYPE();
+
+native @nohold _gst_message_unref ();
+native @nohold _printf ();
 
 spawn do
   async do 
@@ -37,4 +42,3 @@ spawn do
   end
   await FOREVER;
 end
-
