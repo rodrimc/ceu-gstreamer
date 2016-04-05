@@ -2,8 +2,9 @@
 
 native/pre do
 GstElement *src;
-GstElement *sink;
+GstElement *audiorate;
 GstElement *audiosink;
+GstElement *videosink;
 
 ##include <gst/audio/gstaudiobasesink.h>
 ##include <gstsynchronousclock.h>
@@ -17,8 +18,8 @@ cb_pad_added (GstElement *dec, GstPad *pad, gpointer _)
 {
   GstCaps *caps;
   GstStructure *str;
+  GstPad *sinkpad;
   const gchar *name;
-  GstPadTemplate *templ;
   GstElementClass *klass;
 
   /* check media type */
@@ -26,23 +27,15 @@ cb_pad_added (GstElement *dec, GstPad *pad, gpointer _)
   str = gst_caps_get_structure (caps, 0);
   name = gst_structure_get_name (str);
 
-  klass = GST_ELEMENT_GET_CLASS (sink);
-
   if (g_str_has_prefix (name, "audio")) 
-    templ = gst_element_class_get_pad_template (klass, "audio_sink");
+    sinkpad = gst_element_get_static_pad (audiorate, "sink");
   else if (g_str_has_prefix (name, "video"))
-    templ = gst_element_class_get_pad_template (klass, "video_sink");
-  else if (g_str_has_prefix (name, "text")) 
-    templ = gst_element_class_get_pad_template (klass, "text_sink");
+    sinkpad = gst_element_get_static_pad (videosink, "sink");
   else 
-    templ = NULL;
+    sinkpad = NULL;
 
-  if (templ) 
+  if (sinkpad) 
   {
-    GstPad *sinkpad;
-
-    sinkpad = gst_element_request_pad (sink, templ, NULL, NULL);
-
     if (!gst_pad_is_linked (sinkpad))
       gst_pad_link (pad, sinkpad);
 
@@ -77,7 +70,12 @@ with
 end
 
 finalize
-  _sink = _gst_element_factory_make ("playsink", "sink");
+  _videosink = _gst_element_factory_make ("xvimagesink", "videosink");
+with
+end
+
+finalize
+  _audiorate = _gst_element_factory_make ("audiorate", "audiorate");
 with
 end
 
@@ -88,7 +86,8 @@ end
 
 _assert (_pipeline);
 _assert (_src);
-_assert (_sink);
+_assert (_videosink);
+_assert (_audiorate);
 _assert (_audiosink);
 
 finalize
@@ -97,12 +96,20 @@ with
   _gst_object_unref(_bus);
 end
 
-_gst_bin_add_many (_GST_BIN (_pipeline), _src, _sink, null); 
+_gst_bin_add_many (_GST_BIN (_pipeline), _src, _videosink, _audiorate, _audiosink, null); 
+
+if not _gst_element_link (_audiorate, _audiosink) then
+  _printf ("Could not link '%s' with '%s'\n", _GST_OBJECT_NAME (_audiorate),
+                                              _GST_OBJECT_NAME (_audiosink));
+  escape 0;
+end
+
 _g_signal_connect (_G_OBJECT (_src), "pad-added", _G_CALLBACK (_cb_pad_added), null);
 _g_object_set (_G_OBJECT(_src), "uri", _ELEM_N (argv,1), null);
-_g_object_set (_G_OBJECT(_sink), "audio-sink", _audiosink, null);
 
 var u64 tick = 30;
+var u64 clockrate = 1;
+
 var _GstClock&? syncclock;
 finalize
   syncclock = &_gst_synchronous_clock_new ();
@@ -129,7 +136,7 @@ _gst_pipeline_use_clock (_GST_PIPELINE(_pipeline), &&syncclock!);
 watching GST_MESSAGE_ERROR do
   watching GST_MESSAGE_EOS do
     every (tick)ms do
-      _gst_synchronous_clock_advance_time (&&syncclock!, tick * _MS_TO_NS);
+      _gst_synchronous_clock_advance_time (&&syncclock!, clockrate * tick * _MS_TO_NS);
     end
   end
 end
