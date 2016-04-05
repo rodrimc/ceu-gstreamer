@@ -3,15 +3,29 @@
 native do
   GstMessage* PTR;
 end
-input _GstMessage&& GST_MESSAGE_ERROR;
-input _GstMessage&& GST_MESSAGE_EOS;
+input (_GstMessage&&) GST_MESSAGE_ERROR;
+input (_GstMessage&&) GST_MESSAGE_EOS;
+
+native @nohold _gst_message_parse_error ();
+native @nohold _g_error_free ();
+native @nohold _free ();
+native @pure _GST_IS_MESSAGE ();
 
 spawn do
   loop do
     _PTR = await GST_MESSAGE;
     if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_ERROR then
+      /* var _GObject&& src = _UNSAFE(_G_OBJECT (_PTR:src)); */
+      var _GError&& error = null;
+      var char&& dbg_info = null;
+      _gst_message_parse_error (_PTR, &&error, &&dbg_info);
+
+      finalize with
+        _g_error_free (error);
+        _free (dbg_info);
+      end
       async do
-        emit GST_MESSAGE_ERROR => _PTR;
+        emit GST_MESSAGE_ERROR => (_PTR);
       end
     else/if _GST_MESSAGE_TYPE(_PTR) == _GST_MESSAGE_EOS then
       async do

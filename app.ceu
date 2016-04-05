@@ -3,6 +3,11 @@
 native/pre do
 GstElement *src;
 GstElement *sink;
+GstElement *audiosink;
+
+##include <gst/audio/gstaudiobasesink.h>
+##include <gstsynchronousclock.h>
+##define MS_TO_NS 1000000
 
 end
 
@@ -46,60 +51,85 @@ cb_pad_added (GstElement *dec, GstPad *pad, gpointer _)
 }
 end
 
-par/or do 
-  var int &&argc;
-  var char && &&argv;
-  (argc, argv) = await OS_START;
-  
-  if *argc < 2 then
-    _printf ("Usage: %s <uri>\n", _ELEM_N (argv, 0));
-    escape 0;
-  end
+native @nohold _gst_synchronous_clock_advance_time ();
+native @nohold _gst_pipeline_use_clock ();
 
-  _gst_init (argc, &&argv); 
+var int argc;
+var char && &&argv;
+(argc, argv) = await OS_START;
 
-  finalize
-    _pipeline = _gst_pipeline_new ("pipeline");
-  with
-    _gst_object_unref (_pipeline);
-  end
+if argc < 2 then
+  _printf ("Usage: %s <uri>\n", _ELEM_N (argv, 0));
+  escape 0;
+end
 
-  finalize
-    _src = _gst_element_factory_make ("uridecodebin", "decoder");
-  with
-  end
+_gst_init (&&argc, &&argv); 
 
-  finalize
-    _sink = _gst_element_factory_make ("playsink", "sink");
-  with
-  end
+finalize
+  _pipeline = _gst_pipeline_new ("pipeline");
+with
+  _gst_object_unref (_pipeline);
+end
 
-  _assert (_pipeline);
-  _assert (_src);
-  _assert (_sink);
+finalize
+  _src = _gst_element_factory_make ("uridecodebin", "decoder");
+with
+end
 
-  finalize
-    _bus = _gst_pipeline_get_bus (_GST_PIPELINE(_pipeline));
-  with
-    _gst_object_unref(_bus);
-  end
+finalize
+  _sink = _gst_element_factory_make ("playsink", "sink");
+with
+end
 
-  _gst_bin_add_many (_GST_BIN (_pipeline), _src, _sink, null); 
-  _g_signal_connect (_G_OBJECT (_src), "pad-added", _G_CALLBACK (_cb_pad_added), null);
-  _g_object_set (_G_OBJECT(_src), "uri", _ELEM_N (argv,1), null);
+finalize
+  _audiosink = _gst_element_factory_make ("alsasink", "audiosink");
+with
+end
 
-  _gst_element_set_state (_pipeline, _GST_STATE_PLAYING);
-  finalize with
-    _gst_element_set_state (_pipeline, _GST_STATE_NULL);
-  end
-  await FOREVER;
-with 
-  watching GST_MESSAGE_ERROR do
-    watching GST_MESSAGE_EOS do
-      // programa
-      every 1s do
-        _printf("ok\n");
-      end
+_assert (_pipeline);
+_assert (_src);
+_assert (_sink);
+_assert (_audiosink);
+
+finalize
+  _bus = _gst_pipeline_get_bus (_GST_PIPELINE(_pipeline));
+with
+  _gst_object_unref(_bus);
+end
+
+_gst_bin_add_many (_GST_BIN (_pipeline), _src, _sink, null); 
+_g_signal_connect (_G_OBJECT (_src), "pad-added", _G_CALLBACK (_cb_pad_added), null);
+_g_object_set (_G_OBJECT(_src), "uri", _ELEM_N (argv,1), null);
+_g_object_set (_G_OBJECT(_sink), "audio-sink", _audiosink, null);
+
+var u64 tick = 30;
+var _GstClock&? syncclock;
+finalize
+  syncclock = &_gst_synchronous_clock_new ();
+with
+  _g_object_unref (&&syncclock!);
+end
+
+_GST_OBJECT_FLAG_SET (_G_OBJECT(_audiosink), _GST_CLOCK_FLAG_CAN_SET_MASTER);
+var _GstClock&& audioclock = _GST_AUDIO_BASE_SINK (_audiosink):provided_clock;
+_gst_clock_set_timeout (audioclock, tick/2 * _MS_TO_NS);
+
+if not _gst_clock_set_master (audioclock, &&syncclock!) then
+  _printf ("Could not slave audioclock (%p) to clock (%p)\n", 
+      (void &&) audioclock, (void &&) &&syncclock!);
+end
+
+_gst_element_set_state (_pipeline, _GST_STATE_PLAYING);
+finalize with
+  _gst_element_set_state (_pipeline, _GST_STATE_NULL);
+end
+
+_gst_pipeline_use_clock (_GST_PIPELINE(_pipeline), &&syncclock!);
+
+watching GST_MESSAGE_ERROR do
+  watching GST_MESSAGE_EOS do
+    every (tick)ms do
+      _gst_synchronous_clock_advance_time (&&syncclock!, tick * _MS_TO_NS);
     end
   end
 end

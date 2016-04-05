@@ -1,5 +1,5 @@
 input (_GstMessage&&) GST_MESSAGE;
-input (int&&, char&& &&) OS_START;
+input (int, char&& &&) OS_START;
 
 native/pre do
 ##include <glib.h>
@@ -13,12 +13,18 @@ GstBus *bus = NULL;
 end
 
 native @pure _UNSAFE;
-native @pure _gst_init ();
 native @pure _ELEM_N();
 native @pure _GST_MESSAGE_TYPE();
+native @pure _GST_OBJECT_NAME;
+native @pure _GST_AUDIO_BASE_SINK;
 
 native @nohold _gst_message_unref ();
 native @nohold _printf ();
+native @nohold _gst_init ();
+native @nohold _g_object_unref ();
+native @nohold _gst_object_unref ();
+native @nohold _gst_clock_set_master ();
+native @nohold _gst_clock_set_timeout ();
 
 spawn do
   async do 
